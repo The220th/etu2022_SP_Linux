@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
     int buff;
     if(argc != 4)
     {
-        std::cout << "Syntax error. Expected: \"> programm {parent_delay} {fork_delay} {vfork_delay}\"" << std::endl;
+        std::cout << "Syntax error. Expected: \"> ./main {parent_delay} {fork_delay} {vfork_delay}\"" << std::endl;
         return EXIT_FAILURE;
     }
 
