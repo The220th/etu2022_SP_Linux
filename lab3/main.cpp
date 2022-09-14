@@ -11,16 +11,27 @@
 void print_to_file(const char* who, int fd);
 
 
-int main()
+int main(int argc, char* argv[])
 {
+    int buff;
+    if(argc != 4)
+    {
+        std::cout << "Syntax error. Expected: \"> programm {parent_delay} {fork_delay} {vfork_delay}\"" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    unsigned parent_delay = (unsigned)atoi(argv[1]);
+    unsigned fork_delay = (unsigned)atoi(argv[2]);
+    unsigned vfork_delay = (unsigned)atoi(argv[3]);
+
     std::string fileName;
     int fd;
 
     std::cout << "Enter file name: " << std::flush;
     getline(std::cin, fileName);
 
-    //fd = open(fileName.c_str(), O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-    fd = 1;
+    fd = open(fileName.c_str(), O_CREAT | O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR);
+    //fd = 1 is stdout, fd = 0 is stdin, fd = 2 is stderr
     if(fd < 0)
     {
         perror("Cannot open file");
@@ -35,27 +46,42 @@ int main()
     }
     else if(clone_dif == 0)
     {
-        for(int i = 0; i < 10; ++i)
-            print_to_file("fork", fd);
+        sleep(fork_delay);
+        print_to_file("fork child", fd);
         return 0;
     }
-    else
+
+    int child_pid_fork = clone_dif;
+
+    clone_dif = vfork();
+    if(clone_dif < 0)
     {
-        sleep(2);
-        int child_pid = clone_dif;
-        int child_exit_status = 0;
-        for(int i = 0; i < 10; ++i)
-            print_to_file("original", fd);
-        int wait_res = waitpid(child_pid, &child_exit_status, 0);
-        if(wait_res < 0)
+        perror("Cannot vfork");
+        return errno;
+    }
+    else if(clone_dif == 0)
+    {
+        // Ничего не трогаем в vfork, кроме exec* и _exit, иначе поведение непредсказуемо
+        buff = execl("vfork_exec", "vfork_exec", argv[3], fileName.c_str(), NULL);
+        if(buff < 0) // Если вернулись из execl, то уже очень плохо
         {
-            perror("Cannot wait fork");
-            return errno;
+            perror("Cannot execl");
+            _exit(errno);
         }
-        if(WIFEXITED(child_exit_status))
-        {
-            std::cout << "Child proccess " << child_pid << " ends successfully. " << std::endl;
-        }
+    }
+
+    sleep(parent_delay);
+    int child_exit_status = 0;
+    print_to_file("Parent", fd);
+    int wait_res = waitpid(child_pid_fork, &child_exit_status, 0);
+    if(wait_res < 0)
+    {
+        perror("Cannot wait fork");
+        return errno;
+    }
+    if(WIFEXITED(child_exit_status))
+    {
+        std::cout << "Child proccess " << child_pid_fork << " ends successfully. " << std::endl;
     }
 
     if(close(fd) < 0)
@@ -79,7 +105,7 @@ void print_to_file(const char* who, int fd)
 
     std::stringstream out;
 
-    out << who << "says: ";
+    out << who << " says: ";
     out << "pid = " << pid << ", ";
     out << "ppid = " << ppid << ", ";
     out << "sid = " << sid << ", ";
