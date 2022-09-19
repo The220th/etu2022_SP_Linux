@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sstream>
+#include <string>
 
 
 void print_to_file(const char* who, int fd);

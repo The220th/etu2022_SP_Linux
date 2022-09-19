@@ -11,6 +11,7 @@
 #include <time.h>
 
 #include <iostream>
+#include <string>
 
 // CTR+Z ~ SIGTSTP
 void pause_handler(int sig);

@@ -11,7 +11,7 @@
 
 #include <iostream>
 #include <fstream>
-
+#include <string>
 
 
 #define IN_FILE "in.txt"
