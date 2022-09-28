@@ -51,32 +51,50 @@ int main(int argc, char* argv[])
     int pthread_create_return_1, pthread_create_return_2;
 
     int line_i = 1;
-    // Если в файле IN_FILE будет нечётное кол-во строк, то последняя прочтётся, но потоки не создадутся
-    for(std::string cur_line_1, cur_line_2; getline(file_in, cur_line_1) && getline(file_in, cur_line_2); line_i+=2)
+    bool end = false, if_first_created, if_second_created;
+    std::string cur_line_1, cur_line_2;
+    while(!end)
     {
-        std::cout << line_i     << ": \"" << cur_line_1 << "\"" << " for thread 1. " << std::endl;
-        std::cout << (line_i+1) << ": \"" << cur_line_2 << "\"" << " for thread 2. " << std::endl;
+        if_first_created = false;
+        if_second_created = false;
 
-
-        thargs_1.s = cur_line_1.c_str();
-        pthread_create_return_1 = pthread_create(&thread_1, NULL, &start_thread, &thargs_1);
-        if(pthread_create_return_1 != 0)
+        if(!getline(file_in, cur_line_1))
         {
-            perror("Cannot pthread_create");
-            return pthread_create_return_1;
+            end = true;
+            continue;
+        }
+        else
+        {
+            std::cout << line_i << ": \"" << cur_line_1 << "\"" << " for thread 1. " << std::endl;
+            thargs_1.s = cur_line_1.c_str();
+            pthread_create_return_1 = pthread_create(&thread_1, NULL, &start_thread, &thargs_1);
+            if(pthread_create_return_1 != 0)
+            {
+                perror("Cannot pthread_create");
+                return pthread_create_return_1;
+            }
+            if_first_created = true;
         }
 
-        thargs_2.s = cur_line_2.c_str();
-        pthread_create_return_2 = pthread_create(&thread_2, NULL, &start_thread, &thargs_2);
-        if(pthread_create_return_2 != 0)
+        if(!getline(file_in, cur_line_2))
+            end = true;
+        else
         {
-            perror("Cannot pthread_create");
-            return pthread_create_return_2;
+            std::cout << (line_i+1) << ": \"" << cur_line_2 << "\"" << " for thread 2. " << std::endl;
+            thargs_2.s = cur_line_2.c_str();
+            pthread_create_return_2 = pthread_create(&thread_2, NULL, &start_thread, &thargs_2);
+            if(pthread_create_return_2 != 0)
+            {
+                perror("Cannot pthread_create");
+                return pthread_create_return_2;
+            }
+            if_second_created = true;
         }
 
-
-		pthread_join(thread_1, NULL);
-		pthread_join(thread_2, NULL);
+        if(if_first_created)
+            pthread_join(thread_1, NULL);
+        if(if_second_created)
+            pthread_join(thread_2, NULL);
     }
 
     file_in.close();
