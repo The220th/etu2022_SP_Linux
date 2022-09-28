@@ -13,7 +13,7 @@
 #include <iostream>
 
 
-#define BUFF_LEN 256
+#define BUFF_LEN 256*1024
 #define IN_FINE "./in.txt"
 #define OUT_FILE1 "./out1.txt"
 #define OUT_FILE2 "./out2.txt"
@@ -141,14 +141,14 @@ int open_files(int &fd_r, int &fd_w1, int &fd_w2)
         return errno;
     }
 
-    fd_w1 = open(OUT_FILE1, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    fd_w1 = open(OUT_FILE1, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
     if(fd_w1 < 0)
     {
         perror("Cannot open write1 file");
         return errno;
     }
 
-    fd_w2 = open(OUT_FILE2, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    fd_w2 = open(OUT_FILE2, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
     if(fd_w2 < 0)
     {
         perror("Cannot open write2 file");
@@ -227,6 +227,8 @@ int main_parent(int fd_file_r, int fd_pipe_w, pid_t ch_pid_1, pid_t ch_pid_2)
             readBUFF[readed++] = c;
         }
     }
+    if(readed > 0)
+        write(fd_pipe_w, readBUFF, readed);
     std::cout << std::endl << "Readed! " << std::endl;
 
     std::cout << "\"Killing\" ch1..." << std::endl;
