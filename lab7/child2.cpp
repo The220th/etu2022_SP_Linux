@@ -73,12 +73,13 @@ int main(int argc, char* argv[])
 
     //if(first_second_ch == true)
     //    kill(0, SIGUSR2);
-    do
+    while(   !(globalvar_parent_exit_flag == 1 && end_flag == 1)   )
     {
         if(globalvar_another_ch_ready == false)
         {
             //pause();
             //sleep(1);
+            //write(1, ("w2-" + std::to_string(globalvar_parent_exit_flag)).c_str(), 4); 
             continue;
         }
         else
@@ -89,7 +90,7 @@ int main(int argc, char* argv[])
                 if(read_ret <= 0)
                 {
                     //sleep(1);
-                    //std::cout << globalvar_who_am_i << " " << globalvar_parent_exit_flag << ": " << std::flush;
+                    //std::cout << first_second_ch << " " << globalvar_parent_exit_flag << ": " << std::flush;
                     //perror("read pipe");
                 }
                 if((read_ret <= 0) && globalvar_parent_exit_flag == 1)
@@ -98,6 +99,7 @@ int main(int argc, char* argv[])
                     break;
                 }
             }while(read_ret <= 0);
+
             if(read_ret > 0)
             {
                 write(fd_file_w, &c, 1);
@@ -114,7 +116,7 @@ int main(int argc, char* argv[])
         {
             kill(0, SIGUSR2);
         }
-    }while(   !(globalvar_parent_exit_flag == 1 && end_flag == 1)   );
+    }
 
     return 0;
 }

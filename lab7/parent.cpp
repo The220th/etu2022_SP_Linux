@@ -191,6 +191,7 @@ void broken_pipe_handler(int sig)
 
 int main_parent(int fd_file_r, int fd_pipe_w, pid_t ch_pid_1, pid_t ch_pid_2)
 {
+    sleep(1);
     unsigned char readBUFF[BUFF_LEN];
     unsigned char c;
     unsigned readed = 0;
@@ -215,30 +216,30 @@ int main_parent(int fd_file_r, int fd_pipe_w, pid_t ch_pid_1, pid_t ch_pid_2)
         write(fd_pipe_w, readBUFF, readed);
     std::cout << std::endl << "Readed! " << std::endl;
 
-    sleep(1);
+    //sleep(1);
 
-    std::cout << "\"Killing\" ch1..." << std::endl;
+    std::cout << "\n\"Killing\" ch1..." << std::endl;
     if(kill(ch_pid_1, SIGQUIT) < 0)
     {
         perror("Cannot kill ch_1");
         return -1;
     }
 
-    std::cout << "\"Killing\" ch2..." << std::endl;
+    std::cout << "\n\"Killing\" ch2..." << std::endl;
     if(kill(ch_pid_2, SIGQUIT) < 0)
     {
         perror("Cannot kill ch_2");
         return -1;
     }
 
-    std::cout << "Waiting while \"kill\" ch1..." << std::endl;
+    std::cout << "\nWaiting while \"kill\" ch1..." << std::endl;
     if(waitpid(ch_pid_1, NULL, 0) < 0)
     {
         perror("Cannot wait ch_1");
         return -1;
     }
 
-    std::cout << "Waiting while \"kill\" ch2..." << std::endl;
+    std::cout << "\nWaiting while \"kill\" ch2..." << std::endl;
     if(waitpid(ch_pid_2, NULL, 0) < 0)
     {
         perror("Cannot wait ch_2");
