@@ -1,8 +1,3 @@
-/*
-Вариант, если все программы (предок и 2 потомка) реализованы в одном файле.
-
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -32,25 +27,6 @@ int main_parent(int fd_file_r, int fd_pipe_w, pid_t ch_pid_1, pid_t ch_pid_2);
 int set_new_signals_handlers();
 
 // ===== PARENT ====
-
-
-/*0-p, 1-ch1, 2-ch2*/
-int globalvar_who_am_i;
-
-// ===== CHILD ====
-
-int main_child(int fd_file_w, int fd_pipe_r, bool first_second_ch);
-
-void process_handler(int sig);
-
-int globalvar_parent_exit_flag;
-bool globalvar_ch_num;
-bool globalvar_another_ch_ready;
-
-// ===== CHILD ====
-
-
-
 
 // ===== COMMON ====
 
@@ -94,36 +70,45 @@ int main(int argc, char* argv[])
     if(buff < 0)
         return buff;
     
+    const char* fd_outfile1_cstr = std::to_string(fd_outfile1).c_str();
+    const char* fd_outfile2_cstr = std::to_string(fd_outfile2).c_str();
+    const char* read_pipe_fd_cstr = std::to_string(read_pipe_fd).c_str();
 
-    diff = fork();
+
+    diff = vfork();
     if(diff == 0)
     {
-        globalvar_who_am_i = 1;
-        main_child(fd_outfile1, read_pipe_fd, false);
-        _exit(EXIT_SUCCESS);
+        buff = execl("child1", "child1", fd_outfile1_cstr, read_pipe_fd_cstr, NULL);
+        if(buff < 0)
+        {
+            perror("Cannot execl");
+            _exit(EXIT_FAILURE);
+        }
     }
     else if(diff < 0)
     {
-        perror("Cannot fork 1");
+        perror("Cannot vfork 1");
         exit(EXIT_FAILURE);
     }
     pid_ch1 = diff;
 
-    diff = fork();
+    diff = vfork();
     if(diff == 0)
     {
-        globalvar_who_am_i = 2;
-        main_child(fd_outfile2, read_pipe_fd, true);
-        _exit(EXIT_SUCCESS);
+        buff = execl("child2", "child2", fd_outfile2_cstr, read_pipe_fd_cstr, NULL);
+        if(buff < 0)
+        {
+            perror("Cannot execl");
+            _exit(EXIT_FAILURE);
+        }
     }
     else if(diff < 0)
     {
-        perror("Cannot fork 2");
+        perror("Cannot vfork 2");
         exit(EXIT_FAILURE);
     }
     pid_ch2 = diff;
     
-    globalvar_who_am_i = 0;
     main_parent(fd_infile, write_pipe_fd, pid_ch1, pid_ch2);
 
     std::cout << "Closing all file desctiptors... " << std::endl;
@@ -175,13 +160,6 @@ int set_new_signals_handlers()
         return -1;
     }
 
-    oldHandler = signal(SIGQUIT, q_handler);
-    if(oldHandler == SIG_ERR)
-    {
-        perror("Signal SIGQUIT: ");
-        return -1;
-    }
-
     oldHandler = signal(SIGUSR1, SIG_IGN);
     if(oldHandler == SIG_ERR)
     {
@@ -196,18 +174,19 @@ int set_new_signals_handlers()
         return -1;
     }
 
+    oldHandler = signal(SIGQUIT, SIG_IGN);
+    if(oldHandler == SIG_ERR)
+    {
+        perror("Signal SIGQUIT: ");
+        return -1;
+    }
+
     return 0;
 }
 
 void broken_pipe_handler(int sig)
 {
-    std::cout << "Pipe broken! " << globalvar_who_am_i << std::endl;
-    //exit(EXIT_FAILURE);
-}
-
-void q_handler(int sig)
-{
-    globalvar_parent_exit_flag = 1;
+    std::cout << "Pipe broken! " << std::endl;
 }
 
 int main_parent(int fd_file_r, int fd_pipe_w, pid_t ch_pid_1, pid_t ch_pid_2)
@@ -235,6 +214,8 @@ int main_parent(int fd_file_r, int fd_pipe_w, pid_t ch_pid_1, pid_t ch_pid_2)
     if(readed > 0)
         write(fd_pipe_w, readBUFF, readed);
     std::cout << std::endl << "Readed! " << std::endl;
+
+    sleep(1);
 
     std::cout << "\"Killing\" ch1..." << std::endl;
     if(kill(ch_pid_1, SIGQUIT) < 0)
@@ -265,82 +246,4 @@ int main_parent(int fd_file_r, int fd_pipe_w, pid_t ch_pid_1, pid_t ch_pid_2)
     }
 
     return 0;
-}
-
-int main_child(int fd_file_w, int fd_pipe_r, bool first_second_ch)
-{
-    globalvar_ch_num = first_second_ch;
-    bool end_flag = 0;
-    globalvar_parent_exit_flag = 0;
-    __sighandler_t oldHandler;
-    if(first_second_ch == false)
-    {
-        oldHandler = signal(SIGUSR2, process_handler);
-    }
-    else
-    {
-        oldHandler = signal(SIGUSR1, process_handler);
-    }
-    if(oldHandler == SIG_ERR)
-    {
-        perror("Signal SIGPIPE: ");
-        _exit(EXIT_FAILURE);
-    }
-
-    globalvar_another_ch_ready = !first_second_ch;
-
-    int read_ret;
-    unsigned char c;
-
-    if(first_second_ch == true)
-        kill(0, SIGUSR2);
-    do
-    {
-        if(globalvar_another_ch_ready == false)
-        {
-            //pause();
-            sleep(1);
-            continue;
-        }
-        else
-        {
-            do
-            {
-                read_ret = read(fd_pipe_r, &c, 1);
-                if(read_ret <= 0)
-                {
-                    //sleep(1);
-                    //std::cout << globalvar_who_am_i << " " << globalvar_parent_exit_flag << ": " << std::flush;
-                    //perror("read pipe");
-                }
-                if((read_ret <= 0) && globalvar_parent_exit_flag == 1)
-                {
-                    end_flag = 1;
-                    break;
-                }
-            }while(read_ret <= 0);
-            if(read_ret > 0)
-            {
-                write(fd_file_w, &c, 1);
-                write(1, &c, 1);
-            }
-            globalvar_another_ch_ready = false;
-        }
-
-        if(globalvar_ch_num == false)
-        {
-            kill(0, SIGUSR1);
-        }
-        else
-        {
-            kill(0, SIGUSR2);
-        }
-    }while(   !(globalvar_parent_exit_flag == 1 && end_flag == 1)   );
-
-    return 0;
-}
-
-void process_handler(int sig)
-{
-    globalvar_another_ch_ready = true;
 }
