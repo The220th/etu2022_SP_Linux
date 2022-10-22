@@ -13,10 +13,9 @@
 #include <iostream>
 
 
-#define BUFF_LEN 256*1024
-#define IN_FINE "./in.txt"
-#define OUT_FILE1 "./out1.txt"
-#define OUT_FILE2 "./out2.txt"
+#define IS_I_FIRST true
+#define WHAT_REC SIGUSR2
+#define WHAT_THROW SIGUSR1
 
 
 // ===== CHILD ====
@@ -41,19 +40,12 @@ int main(int argc, char* argv[])
 {
     int fd_file_w = atoi(argv[1]); 
     int fd_pipe_r = atoi(argv[2]);
-    const bool first_second_ch = false;
 
     bool end_flag = 0;
     globalvar_parent_exit_flag = 0;
+
     __sighandler_t oldHandler;
-    if(first_second_ch == false)
-    {
-        oldHandler = signal(SIGUSR2, process_handler);
-    }
-    else
-    {
-        oldHandler = signal(SIGUSR1, process_handler);
-    }
+    oldHandler = signal(WHAT_REC, process_handler);
     if(oldHandler == SIG_ERR)
     {
         perror("Signal SIGPIPE: ");
@@ -66,22 +58,15 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    globalvar_another_ch_ready = !first_second_ch;
+    globalvar_another_ch_ready = IS_I_FIRST;
 
     int read_ret;
     unsigned char c;
 
-    //if(first_second_ch == true)
-    //    kill(0, SIGUSR2);
     while(   !(globalvar_parent_exit_flag == 1 && end_flag == 1)   )
     {
         if(globalvar_another_ch_ready == false)
-        {
-            //pause();
-            //sleep(1);
-            //write(1, ("w1-" + std::to_string(globalvar_parent_exit_flag)).c_str(), 4); 
             continue;
-        }
         else
         {
             do
@@ -99,7 +84,7 @@ int main(int argc, char* argv[])
                     break;
                 }
             }while(read_ret <= 0);
-            //std::cout << "-" << read_ret << "-" << std::flush;
+
             if(read_ret > 0)
             {
                 write(fd_file_w, &c, 1);
@@ -108,14 +93,7 @@ int main(int argc, char* argv[])
             globalvar_another_ch_ready = false;
         }
 
-        if(first_second_ch == false)
-        {
-            kill(0, SIGUSR1);
-        }
-        else
-        {
-            kill(0, SIGUSR2);
-        }
+        kill(0, WHAT_THROW);
     }
 
     return 0;
