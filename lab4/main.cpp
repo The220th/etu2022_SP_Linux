@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
     /*
     std::ios::in is read
     std::ios::out is write
-    std::ios::app is add std::andl
+    std::ios::app is add std::endl
     std::ios::binary is binary mode
     std::ios::tranc is clear after open
     std::ios::ate is append mode

@@ -13,6 +13,7 @@
 #include <time.h>
 
 #include <iostream>
+#include <fstream>
 #include <chrono>
 #include <string>
 
@@ -30,19 +31,17 @@
             */
 
 
-const int step_1_end_notification = 5051;
-const int step_2_end_notification = 235112329;
-
 
 void sleep_ms(unsigned ms);
 int create_mount(unsigned prog_num, int shmem_key, int **shmem_p);
 int max_num(int* a, unsigned n);
 /*return < 0, if 1 < 2; return == 0, if 1 == 2; return > 0 if 1 > 2*/
 bool compare_tuple2(int a1, int b1, int a2, int b2);
-int openclose_file(const char* file_name, int file_fd, bool open_close);
-void write_to_file(int fd, unsigned prog_num);
-
+void write_to_file(std::fstream &fd, unsigned prog_num);
 std::string get_cur_time();
+
+
+
 
 /*
 > ./main {prognum_num} {shared_mem_key} {repeat_count} {delay_ms}
@@ -81,7 +80,8 @@ int main(int argc, char* argv[])
 
     srandom(time(NULL) + prog_num);
 
-    int fd = openclose_file(FILE_NAME, -1, false);
+    std::fstream file_out;
+    file_out.open(FILE_NAME, std::ios::out | std::ios::ate);
 
     int *shmem_p;
     int shmem_id = create_mount(prog_num, shmem_key, &shmem_p);
@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
     int *choose_p = shmem_p+0;
     int *number_p = shmem_p+len;
 
-        // ================    Алгоритм Лампорта begin  ==============================
+        /*// ================    Алгоритм Лампорта begin  ==============================
 
         for(unsigned li = 0; li < repeat_count; ++li)
         {
@@ -110,17 +110,17 @@ int main(int argc, char* argv[])
                 }
             
             //   Критическая секция - начало
-                    write_to_file(fd, prog_num);
+                    write_to_file(file_out, prog_num);
             //   Критическая секция - конец
 
             number_p[prog_num] = 0;
         }
 
-        // ================    Алгоритм Лампорта end  ================================
-        //for(unsigned li = 0; li < repeat_count; ++li)
-        //    write_to_file(fd, prog_num);
+        // ================    Алгоритм Лампорта end  ================================*/
+        for(unsigned li = 0; li < repeat_count; ++li)
+            write_to_file(file_out, prog_num);
 
-    openclose_file("", fd, true);
+    file_out.close();
 
     std::cout << get_cur_time() << "Unmounting shared memory with id = " << shmem_id << "... " << std::flush;
         if(shmdt(shmem_p) < 0)
@@ -208,31 +208,6 @@ std::string get_cur_time()
     return "[" + std::to_string(long_long_long_long_very_long_value_long_long) + "] ";
 }
 
-
-int openclose_file(const char* file_name, int file_fd, bool open_close)
-{
-    if(open_close == false)
-    {
-        int fd = open(file_name, O_CREAT | O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR);
-        //fd = 1 is stdout, fd = 0 is stdin, fd = 2 is stderr
-        if(fd < 0)
-        {
-            perror("Cannot open file");
-            exit(EXIT_FAILURE);
-        }
-        return fd;
-    }
-    else
-    {
-        if(close(file_fd) < 0)
-        {
-            perror("Cannot close file");
-            exit(EXIT_FAILURE);
-        }
-        return 0;
-    }
-}
-
 void sleep_ms(unsigned ms)
 {
     // mdelay(write_delay_after); // активное ожидание, хз где: <linux/delay.h>? <ams/delay.h>? <sys/delay.h>? 
@@ -260,19 +235,17 @@ bool compare_tuple2(int a1, int b1, int a2, int b2)
         return (b1-b2) > 0;
 }
 
-void write_to_file(int fd, unsigned prog_num)
+void write_to_file(std::fstream &fd, unsigned prog_num)
 {
     unsigned long write_delay_after = random() % 1500+1;
-    std::string out_str = "";
-    out_str += get_cur_time() + "prog" + std::to_string(prog_num) + "write. ";
 
+    fd << get_cur_time() << "prog" << prog_num << " write. " << std::flush;
 
-    //unsigned N = random() % 350 + 1;
-    //for(unsigned i = 0; i < N; ++i)
-    //    out_str += std::to_string(random()%1000) + " ";
-    out_str += "\n";
-
-    write(fd, out_str.c_str(), out_str.length());
+    unsigned N = random() % 350 + 1;
+    for(unsigned i = 0; i < N; ++i)
+        fd << std::to_string(random()%1000) + " " << std::flush;
+    
+    fd << std::endl;
 
     sleep_ms(write_delay_after);
 }
