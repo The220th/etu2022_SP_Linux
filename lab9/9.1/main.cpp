@@ -17,6 +17,8 @@
 #include <chrono>
 #include <string>
 
+#define SYNC_ON 1             // Если SYNC_ON == 0, то выключить Алгоритм Лампорта и писать, когда вздумается
+#define TERMINAL_OUT_ON 1       // Если TERMINAL_OUT_ON == 0, то запись будет в файл, иначе в терминал
 #define FILE_NAME "out.txt"
 #define Q_MAIN_OWNER 0
 #define ARRAY_LEN 6
@@ -34,12 +36,16 @@
 
 void sleep_ms(unsigned ms);
 int create_mount(unsigned prog_num, int shmem_key, int **shmem_p);
-int max_num(int* a, unsigned n);
+int max_num(const int* a, unsigned n);
 /*return < 0, if 1 < 2; return == 0, if 1 == 2; return > 0 if 1 > 2*/
-bool compare_tuple2(int a1, int b1, int a2, int b2);
+int compare_tuple2(int a1, int b1, int a2, int b2);
+/*true if a < c or a == c and b < d*/
+bool compare_less(int a, int b, int c, int d);
 void write_to_file(std::fstream &fd, unsigned prog_num);
 std::string get_cur_time();
 
+
+std::string print_arr(const int* a, unsigned n);
 
 
 
@@ -84,15 +90,17 @@ int main(int argc, char* argv[])
     file_out.open(FILE_NAME, std::ios::out | std::ios::ate);
 
     int *shmem_p;
-    int shmem_id = create_mount(prog_num, shmem_key, &shmem_p);
+    const int shmem_id = create_mount(prog_num, shmem_key, &shmem_p);
     std::cout << get_cur_time() << "Getted addresses:" << std::endl;
     std::cout << "Shared memory (key = " << shmem_key << ", id = " << shmem_id << "): " << shmem_p << std::endl;
+    sleep(1);
 
-    int len = ARRAY_LEN / 2;
+    const unsigned len = ARRAY_LEN / 2;
     int *choose_p = shmem_p+0;
     int *number_p = shmem_p+len;
 
-        /*// ================    Алгоритм Лампорта begin  ==============================
+        #if SYNC_ON != 0
+        // ================    Алгоритм Лампорта begin  ==============================
 
         for(unsigned li = 0; li < repeat_count; ++li)
         {
@@ -103,22 +111,35 @@ int main(int argc, char* argv[])
             for(unsigned j = 0; j < len; ++j)
                 if(j != prog_num)
                 {
-                    while(choose_p[j]);
+                    while(choose_p[j] == 1);
 
                     while(  number_p[j] != 0
                                              && compare_tuple2(number_p[j], j, number_p[prog_num], prog_num) < 0 );
+                                             //&& compare_less(number_p[j], j, number_p[prog_num], prog_num)   );
                 }
             
             //   Критическая секция - начало
+            #if TERMINAL_OUT_ON == 0
+            std::cout << get_cur_time() << "prog" << prog_num << " enter in critical section - " << print_arr(number_p, len) << std::endl;
+            #endif
+
                     write_to_file(file_out, prog_num);
+
+            #if TERMINAL_OUT_ON == 0
+            std::cout << get_cur_time() << "prog" << prog_num << " leave from critical section - " << print_arr(number_p, len) << std::endl;
+            #endif
             //   Критическая секция - конец
 
             number_p[prog_num] = 0;
         }
 
-        // ================    Алгоритм Лампорта end  ================================*/
-        for(unsigned li = 0; li < repeat_count; ++li)
-            write_to_file(file_out, prog_num);
+        // ================    Алгоритм Лампорта end  ================================
+        #else
+            // ================    Наобум begin  ================================
+            for(unsigned li = 0; li < repeat_count; ++li)
+                write_to_file(file_out, prog_num);
+            // ================    Наобум end  ==================================
+        #endif
 
     file_out.close();
 
@@ -141,7 +162,7 @@ int main(int argc, char* argv[])
         std::cout << "OK! " << std::endl;
     }
 
-    std::cout << "============================== DONE! ==============================" << std::endl;
+    std::cout << "============================== prog" << prog_num << " DONE! ==============================" << std::endl;
     return 0;
 }
 
@@ -168,7 +189,7 @@ int create_mount(unsigned prog_num, int shmem_key, int **shmem_p)
             exit(EXIT_FAILURE);
         }
         shmem_id = buff;
-        std::cout << get_cur_time() << "A shared memory with key =  " << shmem_key << " has been created. Its id = " << buff << ". Mounting... " << std::endl;
+        std::cout << get_cur_time() << "A shared memory with key = " << shmem_key << " has been created. Its id = " << buff << ". Mounting... " << std::endl;
     }
     else
     {
@@ -218,34 +239,70 @@ void sleep_ms(unsigned ms)
         perror("usleep error");
 }
 
-int max_num(int* a, unsigned n)
+int max_num(const int* a, unsigned n)
 {
-    int res = a[0];
+    int res = -1;
     for(unsigned li = 0; li < n; ++li)
         if(res < a[li])
             res = a[li];
     return res;
 }
 
-bool compare_tuple2(int a1, int b1, int a2, int b2)
+int compare_tuple2(int a1, int b1, int a2, int b2)
 {
     if(a1 != a2)
-        return (a1-a2) > 0;
+        return a1-a2;
     else
-        return (b1-b2) > 0;
+        return b1-b2;
+}
+
+bool compare_less(int a, int b, int c, int d)
+{
+    return (a < c) || (a == c && b < d);
 }
 
 void write_to_file(std::fstream &fd, unsigned prog_num)
 {
     unsigned long write_delay_after = random() % 1500+1;
 
-    fd << get_cur_time() << "prog" << prog_num << " write. " << std::flush;
+    #if TERMINAL_OUT_ON == 1
+    std::cout << get_cur_time() << "prog" << prog_num << " write: " << std::flush;
+    #else
+    fd << get_cur_time() << "prog" << prog_num << " write: " << std::flush;
+    #endif
 
-    unsigned N = random() % 350 + 1;
+    unsigned N = random() % 15 + 1;
     for(unsigned i = 0; i < N; ++i)
-        fd << std::to_string(random()%1000) + " " << std::flush;
-    
-    fd << std::endl;
+    {
+        #if TERMINAL_OUT_ON == 1
+        std::cout << std::to_string(random() % 1000) + " " << std::flush;
+        #else
+        fd << std::to_string(random() % 1000) + " " << std::flush;
+        #endif
+        if(random() % 2 == 0)
+            sleep_ms(random() % 150);
+    }
 
+    #if TERMINAL_OUT_ON == 1
+    std::cout << std::endl;
+    #else
+    fd << std::endl;
+    #endif
+    
     sleep_ms(write_delay_after);
+}
+
+std::string print_arr(const int* a, unsigned n)
+{
+    std::string res = "[";
+
+    for(unsigned li = 0; li < n; ++li)
+    {
+        res += std::to_string(a[li]);
+        if(li != n-1)
+        res += " ";
+    }
+    res += "]";
+
+    return res;
 }
