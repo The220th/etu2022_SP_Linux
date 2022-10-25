@@ -42,6 +42,7 @@ int compare_tuple2(int a1, int b1, int a2, int b2);
 /*true if a < c or a == c and b < d*/
 bool compare_less(int a, int b, int c, int d);
 void write_to_file(std::fstream &fd, unsigned prog_num);
+void write_to_file(int fd, unsigned prog_num);
 std::string get_cur_time();
 
 
@@ -86,8 +87,9 @@ int main(int argc, char* argv[])
 
     srandom(time(NULL) + prog_num);
 
-    std::fstream file_out;
-    file_out.open(FILE_NAME, std::ios::out | std::ios::ate);
+    //std::fstream file_out;
+    //file_out.open(FILE_NAME, std::ios::out | std::ios::ate);
+    int fd = open(FILE_NAME, O_CREAT | O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR);
 
     int *shmem_p;
     const int shmem_id = create_mount(prog_num, shmem_key, &shmem_p);
@@ -123,7 +125,8 @@ int main(int argc, char* argv[])
             std::cout << get_cur_time() << "prog" << prog_num << " enter in critical section - " << print_arr(number_p, len) << std::endl;
             #endif
 
-                    write_to_file(file_out, prog_num);
+                    //write_to_file(file_out, prog_num);
+                    write_to_file(fd, prog_num);
 
             #if TERMINAL_OUT_ON == 0
             std::cout << get_cur_time() << "prog" << prog_num << " leave from critical section - " << print_arr(number_p, len) << std::endl;
@@ -137,11 +140,14 @@ int main(int argc, char* argv[])
         #else
             // ================    Наобум begin  ================================
             for(unsigned li = 0; li < repeat_count; ++li)
-                write_to_file(file_out, prog_num);
+                //write_to_file(file_out, prog_num);
+                write_to_file(fd, prog_num);
             // ================    Наобум end  ==================================
         #endif
 
-    file_out.close();
+    //file_out.close();
+    if(close(fd) < 0)
+        perror("Cannot close file");
 
     std::cout << get_cur_time() << "Unmounting shared memory with id = " << shmem_id << "... " << std::flush;
         if(shmdt(shmem_p) < 0)
@@ -288,6 +294,35 @@ void write_to_file(std::fstream &fd, unsigned prog_num)
     #else
     fd << std::endl;
     #endif
+    
+    sleep_ms(write_delay_after);
+}
+
+void write_to_file(int fd, unsigned prog_num)
+{
+    unsigned long write_delay_after = random() % 1500+1;
+
+    #if TERMINAL_OUT_ON == 1
+    int ffd = 1;
+    #else
+    int ffd = fd;
+    #endif
+
+    std::string buffS;
+
+    buffS = get_cur_time() + "prog" + std::to_string(prog_num) + " write: ";
+    write(ffd, buffS.c_str(), buffS.length());
+
+    unsigned N = random() % 15 + 1;
+    for(unsigned i = 0; i < N; ++i)
+    {
+        buffS = std::to_string(random() % 1000) + " ";
+        write(ffd, buffS.c_str(), buffS.length());
+        if(random() % 2 == 0)
+            sleep_ms(random() % 150);
+    }
+
+    write(ffd, "\n", 1);
     
     sleep_ms(write_delay_after);
 }

@@ -4,29 +4,42 @@
 
 Задание:
 
-1. Написать две программы, которые работают параллельно и обмениваются массивом целых чисел через две общие разделяемые области. Через первую область первая программа передает массив второй программе. Через вторую область вторая программа возвращает первой программе массив, каждый элемент которого уменьшен на 1. Обе программы должны вывести получаемую последовательность чисел. Синхронизация работы программ должна осуществляться с помощью общих переменных, размещенных в разделяемой памяти.
+1. Написать 3 программы, которые запускаются в произвольном порядке и построчно записывают свои индивидуальные данные в один файл через определенный промежуток времени. Пока не закончит писать строку одна программа, другие две не должны обращаться к файлу. Частота записи данных в файл и количество записываемых строк определяются входными параметрами, задаваемыми при запуске каждой программы. При завершении работы одной из программ другие должны продолжить свою работу. Синхронизация работы программ должна осуществляться с помощью общих переменных, размещенных в разделяемой памяти.
 
-2. Откомпилировать 2 программы и запустить их на разных терминалах.
+2. Откомпилировать 3 программы и запустить их на разных терминалах с различными входными параметрами.
 
 # Выполнение работы
 
-Примеры протоколов выполнения программ представлены на рисунках 1 и 2.
+Для организации синхронизации с обеспечением взаимного исключения, отсутствия
+блокировки и линейного ожидания был выбран Алгоритм Лампорта.
+
+Пример протокола выполнения при выключенной синхронизации с выводом в терминал представлен на рисунке 1.
 
 ![Рисунок 1 — Пример протокола выполнения программы 1](./imgs/1.png)
 
+Пример протокола выполнения при включенной синхронизации с выводом в терминал представлен на рисунке 2.
+
 ![Рисунок 2 — Пример протокола выполнения программы 2](./imgs/2.png)
 
-Как видно, номера программ перепутаны: вторая программа пишет массив, а первая его декрементирует. Программы имеют синхронизацию как ожидание создания разделяемой памяти друг другом, так и синхронизация, что запись уже закончена. Сам массив чисел рандомный, поменять кол-во элементов можно в программе, поменяв define ARRAY_LEN.
+Пример протокола выполнения при выключенной синхронизации с выводом в файл представлен на рисунке 3.
+
+![Рисунок 3 — Пример протокола выполнения программы 3](./imgs/3.png)
+
+Пример протокола выполнения при включенной синхронизации с выводом в файл представлен на рисунке 4.
+
+![Рисунок 4 — Пример протокола выполнения программы 4](./imgs/4.png)
+
+Как видно, в случаях 1 и 3 вывод перемешан, так как синхронизации нет. В примерах 2 и 4 коллизии отсутствуют. Настраивать режим работы программы можно, меняя `SYNC_ON` и `TERMINAL_OUT_ON` в исходнике.
 
 Исходный код программ представлен в приложении.
 
 # ВЫВОД
 
-В результате выполнение лабораторной работы было проведено знакомство с организацией разделяемой памяти и системными функциями, обеспечивающими обмен данными между процессами, в ОС GNU/Linux.
+В результате выполнение лабораторной работы было проведено знакомство с организацией разделяемой памяти и системными функциями, обеспечивающими обмен данными между процессами, в ОС GNU/Linux. Также был изучен и реализован Алгоритм Лампорта. 
 
 # Приложение
 
-Исходный код программы `prog1`:
+Исходный код программы:
 
 ``` cpp
 #include <stdio.h>
@@ -44,125 +57,206 @@
 #include <time.h>
 
 #include <iostream>
+#include <fstream>
 #include <chrono>
 #include <string>
 
-#define PROG_NUM 0
-#define ARRAY_LEN 30
+#define SYNC_ON 1             // Если SYNC_ON == 0, то выключить Алгоритм Лампорта и писать, когда вздумается
+#define TERMINAL_OUT_ON 1       // Если TERMINAL_OUT_ON == 0, то запись будет в файл, иначе в терминал
+#define FILE_NAME "out.txt"
+#define Q_MAIN_OWNER 0
+#define ARRAY_LEN 6
+            /*
+                ARRAY_LEN = len(choosing) + len(number) = 3 + 3, where:
+                0* choosing_0
+                1* choosing_1
+                2* choosing_2
+                3* number_0
+                4* number_1
+                5* number_2
+            */
 
 
-const int step_1_end_notification = 5051;
-const int step_2_end_notification = 235112329;
 
-/*
-Создаёт виртуальную память, если есть новая по ключу shmem_key_1 и монтирует её
-Пытает примонтировать память по ключу shmem_key_2
-В shmem_p_1 помещается указатель на виртуальную память с ключом shmem_key_1
-В shmem_p_2 помещается указатель на виртуальную память с ключом shmem_key_2
-Возвращает id виртуальной памяти с ключом shmem_key_1
-*/
-int create_mount(int shmem_key_1, int shmem_key_2, int **shmem_p_1, int **shmem_p_2);
-
+void sleep_ms(unsigned ms);
+int create_mount(unsigned prog_num, int shmem_key, int **shmem_p);
+int max_num(const int* a, unsigned n);
+/*return < 0, if 1 < 2; return == 0, if 1 == 2; return > 0 if 1 > 2*/
+int compare_tuple2(int a1, int b1, int a2, int b2);
+/*true if a < c or a == c and b < d*/
+bool compare_less(int a, int b, int c, int d);
+void write_to_file(std::fstream &fd, unsigned prog_num);
+void write_to_file(int fd, unsigned prog_num);
 std::string get_cur_time();
 
+
+std::string print_arr(const int* a, unsigned n);
+
+
+
 /*
-> ./main {shared_mem_key_1} {shared_mem_key_2}
+> ./main {prognum_num} {shared_mem_key} {repeat_count} {delay_ms}
 */
 int main(int argc, char* argv[])
 {
-    srandom(time(NULL));
-    if(argc != 3)
+    if(argc != 5)
     {
-        std::cout << "Syntax error. Expected: \"> ./main {prognum_num} {shared_mem_key_1} {shared_mem_key_2}\"" << std::endl;
+        std::cout << "Syntax error. Expected: \"> ./main {prognum_num} {shared_mem_key} {repeat_count} {delay_ms}\"" << std::endl;
         exit(EXIT_FAILURE);
     }
-    const unsigned my_num = PROG_NUM;
-    const int shmem_key_1 = atoi(argv[1]);
-    const int shmem_key_2 = atoi(argv[2]);
-    if(   !(my_num == 0 || my_num == 1)   )
+    const unsigned prog_num = (unsigned)atoi(argv[1]);
+    const int shmem_key = atoi(argv[2]);
+    const int repeat_count = atoi(argv[3]);
+    const unsigned delay = (unsigned)atoi(argv[4]);
+    if(   !(prog_num == 0 || prog_num == 1 || prog_num == 2)   )
     {
-        std::cout << "{prognum_num} must be 0 or 1. " << std::endl;
+        std::cout << "{prog_num} must be 0, 1 or 2. " << std::endl;
         exit(EXIT_FAILURE);
     }
-    if(shmem_key_1 <= 0)
+    if(shmem_key <= 0)
     {
-        std::cout << "{shared_mem_key_1} must be possitive. " << std::endl;
+        std::cout << "{shared_mem_key} must be possitive. " << std::endl;
         exit(EXIT_FAILURE);
     }
-    if(shmem_key_2 <= 0)
+    if(repeat_count <= 0)
     {
-        std::cout << "{shared_mem_key_2} must be possitive. " << std::endl;
+        std::cout << "{repeat_count} must be possitive. " << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    if(atoi(argv[4]) <= 0)
+    {
+        std::cout << "{delay_ms} must be possitive. " << std::endl;
         exit(EXIT_FAILURE);
     }
 
-    int *shmem_p_1, *shmem_p_2;
-    int shmem_id = create_mount(shmem_key_1, shmem_key_2, &shmem_p_1, &shmem_p_2);
+    srandom(time(NULL) + prog_num);
+
+    //std::fstream file_out;
+    //file_out.open(FILE_NAME, std::ios::out | std::ios::ate);
+    int fd = open(FILE_NAME, O_CREAT | O_WRONLY | O_APPEND, S_IRUSR | S_IWUSR);
+
+    int *shmem_p;
+    const int shmem_id = create_mount(prog_num, shmem_key, &shmem_p);
     std::cout << get_cur_time() << "Getted addresses:" << std::endl;
-    std::cout << "Shared memory (key = " << shmem_key_1 << ", id = " << shmem_id << "): " << shmem_p_1 << std::endl;
-    std::cout << "Shared memory (key = " << shmem_key_1 << "): " << shmem_p_2 << std::endl;
+    std::cout << "Shared memory (key = " << shmem_key << ", id = " << shmem_id << "): " << shmem_p << std::endl;
+    sleep(1);
 
-    int arrrrrr[ARRAY_LEN];
-    int *p;
+    const unsigned len = ARRAY_LEN / 2;
+    int *choose_p = shmem_p+0;
+    int *number_p = shmem_p+len;
 
+        #if SYNC_ON != 0
+        // ================    Алгоритм Лампорта begin  ==============================
 
-        *shmem_p_1 = 0;
-        while(*shmem_p_2 != step_1_end_notification)
+        for(unsigned li = 0; li < repeat_count; ++li)
         {
-            std::cout << get_cur_time() << "Another program has not finished yet. Waiting... " << std::endl;
-            sleep(1);
-        }
-        std::cout << get_cur_time() << "Another program finished its job. " << std::endl;
+            choose_p[prog_num] = 1;
+            number_p[prog_num] = max_num(number_p, len)+1;
+            choose_p[prog_num] = 0;
 
-        std::cout << get_cur_time() << "Reading array from " << shmem_p_2 << ": \n[" << std::flush;
-        p = shmem_p_2; ++p;
-        for(unsigned li = 0; li < ARRAY_LEN; ++li, ++p)
+            for(unsigned j = 0; j < len; ++j)
+                if(j != prog_num)
+                {
+                    while(choose_p[j] == 1);
+
+                    while(  number_p[j] != 0
+                                             && compare_tuple2(number_p[j], j, number_p[prog_num], prog_num) < 0 );
+                                             //&& compare_less(number_p[j], j, number_p[prog_num], prog_num)   );
+                }
+            
+            //   Критическая секция - начало
+            #if TERMINAL_OUT_ON == 0
+            std::cout << get_cur_time() << "prog" << prog_num << " enter in critical section - " << print_arr(number_p, len) << std::endl;
+            #endif
+
+                    //write_to_file(file_out, prog_num);
+                    write_to_file(fd, prog_num);
+
+            #if TERMINAL_OUT_ON == 0
+            std::cout << get_cur_time() << "prog" << prog_num << " leave from critical section - " << print_arr(number_p, len) << std::endl;
+            #endif
+            //   Критическая секция - конец
+
+            number_p[prog_num] = 0;
+        }
+
+        // ================    Алгоритм Лампорта end  ================================
+        #else
+            // ================    Наобум begin  ================================
+            for(unsigned li = 0; li < repeat_count; ++li)
+                //write_to_file(file_out, prog_num);
+                write_to_file(fd, prog_num);
+            // ================    Наобум end  ==================================
+        #endif
+
+    //file_out.close();
+    if(close(fd) < 0)
+        perror("Cannot close file");
+
+    std::cout << get_cur_time() << "Unmounting shared memory with id = " << shmem_id << "... " << std::flush;
+        if(shmdt(shmem_p) < 0)
         {
-            arrrrrr[li] = *p;
-            std::cout << arrrrrr[li] << ", ";
+            perror("shmdt failed");
+            exit(EXIT_FAILURE);
         }
-        std::cout << "\b\b] " << std::endl;
-
-        std::cout << get_cur_time() << "Decrementing... " << std::flush;
-        for(unsigned li = 0; li < ARRAY_LEN; ++li) --arrrrrr[li];
-        std::cout << "Decremented! " << std::endl;
-
-        std::cout << get_cur_time() << "Writing array to shared memory at " << shmem_p_1 << "... " << std::endl;
-        p = shmem_p_1; ++p;
-        for(unsigned li = 0; li < ARRAY_LEN; ++li, ++p) *p = arrrrrr[li];
-        std::cout << get_cur_time() << "Writing done! " << std::endl;
-        *shmem_p_1 = step_2_end_notification;
-
-
-    std::cout << get_cur_time() << "Destroyed shared memory with id = " << shmem_id << "... " << std::flush;
-    shmctl(shmem_id, IPC_RMID, NULL);
     std::cout << "OK! " << std::endl;
 
-    std::cout << "============================== DONE! ==============================" << std::endl;
+    if(prog_num == Q_MAIN_OWNER)
+    {
+        std::cout << get_cur_time() << "Destroyed shared memory with id = " << shmem_id << "... " << std::flush;
+            if(shmctl(shmem_id, IPC_RMID, NULL) < 0)
+            {
+                perror("shmdt failed");
+                exit(EXIT_FAILURE);
+            }
+        std::cout << "OK! " << std::endl;
+    }
+
+    std::cout << "============================== prog" << prog_num << " DONE! ==============================" << std::endl;
     return 0;
 }
 
 
-int create_mount(int shmem_key_1, int shmem_key_2, int **shmem_p_1, int **shmem_p_2)
+int create_mount(unsigned prog_num, int shmem_key, int **shmem_p)
 {
     const unsigned page_sz = 4*1024; // размер страницы 4 кБ
     int buff;
     int *buffp;
-    int shmem_id_1;
-    const unsigned needed_bytes = (ARRAY_LEN+1)*4;
+    int shmem_id;
+    const unsigned needed_bytes = ARRAY_LEN*4;
     const unsigned shmem_len = (needed_bytes%page_sz==0?needed_bytes:(needed_bytes/page_sz)*page_sz+page_sz);
     
-    std::cout << get_cur_time() << "Len of int array is " << ARRAY_LEN << " + sync int. Total int needed: " << (ARRAY_LEN+1) << ". So shared memory size will be " << shmem_len << " bytes. " << std::endl;
+    std::cout << get_cur_time() << "Len of int array is " << ARRAY_LEN << ". So shared memory size will be " << shmem_len << " bytes. " << std::endl;
     
-    buff = shmget(shmem_key_1, shmem_len, 0666 | IPC_CREAT | IPC_EXCL);
-    if(buff == -1)
+
+    if(prog_num == Q_MAIN_OWNER)
     {
-        std::cout << "Cannot create shared memory with key = " << shmem_key_1 << ", because it is already exist, choose another one" << std::endl;
-        perror("shmget failed");
-        exit(EXIT_FAILURE);
+        buff = shmget(shmem_key, shmem_len, 0666 | IPC_CREAT | IPC_EXCL);
+        if(buff == -1)
+        {
+            std::cout << "Cannot create shared memory with key = " << shmem_key << ", because it is already exist, choose another one. " << std::endl;
+            perror("shmget failed");
+            exit(EXIT_FAILURE);
+        }
+        shmem_id = buff;
+        std::cout << get_cur_time() << "A shared memory with key = " << shmem_key << " has been created. Its id = " << buff << ". Mounting... " << std::endl;
     }
-    shmem_id_1 = buff;
-    std::cout << get_cur_time() << "A shared memory with key =  " << shmem_key_1 << " has been created. Its id = " << buff << ". Mounting... " << std::endl;
-    
+    else
+    {
+        do
+        {
+            buff = shmget(shmem_key, shmem_len, IPC_EXCL);
+            if(buff == -1)
+            {
+                std::cout << get_cur_time() << "Shared memory with key = " << shmem_key << " doesn't exist yet. Waiting..." << std::endl;
+                sleep(1);
+            }
+        }while(buff == -1);
+        shmem_id = buff;
+        std::cout << get_cur_time() << "There was an attachment to the shared memory with key = " << shmem_key << ". Its id = " << buff << ". " << std::endl;
+    }
+
+
     buffp = (int*)shmat(buff, NULL, 0);
     if(buffp == NULL)
     {
@@ -170,200 +264,125 @@ int create_mount(int shmem_key_1, int shmem_key_2, int **shmem_p_1, int **shmem_
         perror("shmat failed");
         exit(EXIT_FAILURE);
     }
-    *shmem_p_1 = buffp;
+    *shmem_p = buffp;
 
-    do
-    {
-        buff = shmget(shmem_key_2, shmem_len, IPC_EXCL);
-        if(buff == -1)
-        {
-            std::cout << get_cur_time() << "Shared memory with key = " << shmem_key_2 << " doesn't exist yet. Waiting..." << std::endl;
-            sleep(1);
-        }
-    }while(buff == -1);
-    buffp = (int*)shmat(buff, NULL, 0);
-    std::cout << get_cur_time() << "There was an attachment to the shared memory with key = " << shmem_key_2 << ". Its id = " << buff << ". " << std::endl;
-    *shmem_p_2 = buffp;
-
-    return shmem_id_1;
-}
-
-std::string get_cur_time()
-{
-    long long long_long_long_long_very_long_value_long_long = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch()).count();
-    return "[" + std::to_string(long_long_long_long_very_long_value_long_long) + "] ";
-}
-```
-
-Исходный код программы `prog2`:
-
-``` cpp
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-
-#include <unistd.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/wait.h>
-#include <time.h>
-
-#include <iostream>
-#include <chrono>
-#include <string>
-
-#define PROG_NUM 1
-#define ARRAY_LEN 30
-
-
-const int step_1_end_notification = 5051;
-const int step_2_end_notification = 235112329;
-
-/*
-Создаёт виртуальную память, если есть новая по ключу shmem_key_1 и монтирует её
-Пытает примонтировать память по ключу shmem_key_2
-В shmem_p_1 помещается указатель на виртуальную память с ключом shmem_key_1
-В shmem_p_2 помещается указатель на виртуальную память с ключом shmem_key_2
-Возвращает id виртуальной памяти с ключом shmem_key_1
-*/
-int create_mount(int shmem_key_1, int shmem_key_2, int **shmem_p_1, int **shmem_p_2);
-
-std::string get_cur_time();
-
-/*
-> ./main {shared_mem_key_1} {shared_mem_key_2}
-*/
-int main(int argc, char* argv[])
-{
-    srandom(time(NULL));
-    if(argc != 3)
-    {
-        std::cout << "Syntax error. Expected: \"> ./main {prognum_num} {shared_mem_key_1} {shared_mem_key_2}\"" << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    const unsigned my_num = PROG_NUM;
-    const int shmem_key_1 = atoi(argv[1]);
-    const int shmem_key_2 = atoi(argv[2]);
-    if(   !(my_num == 0 || my_num == 1)   )
-    {
-        std::cout << "{prognum_num} must be 0 or 1. " << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    if(shmem_key_1 <= 0)
-    {
-        std::cout << "{shared_mem_key_1} must be possitive. " << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    if(shmem_key_2 <= 0)
-    {
-        std::cout << "{shared_mem_key_2} must be possitive. " << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
-    int *shmem_p_1, *shmem_p_2;
-    int shmem_id = create_mount(shmem_key_1, shmem_key_2, &shmem_p_1, &shmem_p_2);
-    std::cout << get_cur_time() << "Getted addresses:" << std::endl;
-    std::cout << "Shared memory (key = " << shmem_key_1 << ", id = " << shmem_id << "): " << shmem_p_1 << std::endl;
-    std::cout << "Shared memory (key = " << shmem_key_1 << "): " << shmem_p_2 << std::endl;
-
-    int arrrrrr[ARRAY_LEN];
-    int *p;
-
-
-        *shmem_p_1 = 0;
-        std::cout << get_cur_time() << "Generating array: \n[" << std::flush;
+    if(prog_num == Q_MAIN_OWNER)
         for(unsigned li = 0; li < ARRAY_LEN; ++li)
-        {
-            arrrrrr[li] = random() % 100+1;
-            std::cout << arrrrrr[li] << ", ";
-        }
-        std::cout << "\b\b] " << std::endl;
+            buffp[li] = 0;
 
-        std::cout << get_cur_time() << "Writing array to shared memory at " << shmem_p_1 << "... " << std::endl;
-        p = shmem_p_1; ++p;
-        for(unsigned li = 0; li < ARRAY_LEN; ++li, ++p) *p = arrrrrr[li];
-        std::cout << get_cur_time() << "Writing done! " << std::endl;
-        *shmem_p_1 = step_1_end_notification;
-
-        while(*shmem_p_2 != step_2_end_notification)
-        {
-            std::cout << get_cur_time() << "Another program has not finished yet. Waiting... " << std::endl;
-            sleep(1);
-        }
-        std::cout << get_cur_time() << "Another program finished its job. " << std::endl;
-
-        std::cout << get_cur_time() << "Reading array from shared memory at " << shmem_p_2 << ": \n[" << std::flush;
-        p = shmem_p_2; ++p;
-        for(unsigned li = 0; li < ARRAY_LEN; ++li, ++p)
-        {
-            arrrrrr[li] = *p;
-            std::cout << arrrrrr[li] << ", ";
-        }
-        std::cout << "\b\b] " << std::endl;
-
-
-    std::cout << get_cur_time() << "Destroyed shared memory with id = " << shmem_id << "... " << std::flush;
-    shmctl(shmem_id, IPC_RMID, NULL);
-    std::cout << "OK! " << std::endl;
-
-    std::cout << "============================== DONE! ==============================" << std::endl;
-    return 0;
-}
-
-
-int create_mount(int shmem_key_1, int shmem_key_2, int **shmem_p_1, int **shmem_p_2)
-{
-    const unsigned page_sz = 4*1024; // размер страницы 4 кБ
-    int buff;
-    int *buffp;
-    int shmem_id_1;
-    const unsigned needed_bytes = (ARRAY_LEN+1)*4;
-    const unsigned shmem_len = (needed_bytes%page_sz==0?needed_bytes:(needed_bytes/page_sz)*page_sz+page_sz);
-    
-    std::cout << get_cur_time() << "Len of int array is " << ARRAY_LEN << " + sync int. Total int needed: " << (ARRAY_LEN+1) << ". So shared memory size will be " << shmem_len << " bytes. " << std::endl;
-    
-    buff = shmget(shmem_key_1, shmem_len, 0666 | IPC_CREAT | IPC_EXCL);
-    if(buff == -1)
-    {
-        std::cout << "Cannot create shared memory with key = " << shmem_key_1 << ", because it is already exist, choose another one" << std::endl;
-        perror("shmget failed");
-        exit(EXIT_FAILURE);
-    }
-    shmem_id_1 = buff;
-    std::cout << get_cur_time() << "A shared memory with key =  " << shmem_key_1 << " has been created. Its id = " << buff << ". Mounting... " << std::endl;
-    
-    buffp = (int*)shmat(buff, NULL, 0);
-    if(buffp == NULL)
-    {
-        std::cout << "Cannot mount=<" << std::endl;
-        perror("shmat failed");
-        exit(EXIT_FAILURE);
-    }
-    *shmem_p_1 = buffp;
-
-    do
-    {
-        buff = shmget(shmem_key_2, shmem_len, IPC_EXCL);
-        if(buff == -1)
-        {
-            std::cout << get_cur_time() << "Shared memory with key = " << shmem_key_2 << " doesn't exist yet. Waiting..." << std::endl;
-            sleep(1);
-        }
-    }while(buff == -1);
-    buffp = (int*)shmat(buff, NULL, 0);
-    std::cout << get_cur_time() << "There was an attachment to the shared memory with key = " << shmem_key_2 << ". Its id = " << buff << ". " << std::endl;
-    *shmem_p_2 = buffp;
-
-    return shmem_id_1;
+    return shmem_id;
 }
 
 std::string get_cur_time()
 {
     long long long_long_long_long_very_long_value_long_long = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()).time_since_epoch()).count();
     return "[" + std::to_string(long_long_long_long_very_long_value_long_long) + "] ";
+}
+
+void sleep_ms(unsigned ms)
+{
+    // mdelay(write_delay_after); // активное ожидание, хз где: <linux/delay.h>? <ams/delay.h>? <sys/delay.h>? 
+
+    // std::this_thread::sleep_for(std::chrono::milliseconds(x)); //   #include <chrono>    and    #include <thread>
+
+    if(usleep(1000*ms) < 0)
+        perror("usleep error");
+}
+
+int max_num(const int* a, unsigned n)
+{
+    int res = -1;
+    for(unsigned li = 0; li < n; ++li)
+        if(res < a[li])
+            res = a[li];
+    return res;
+}
+
+int compare_tuple2(int a1, int b1, int a2, int b2)
+{
+    if(a1 != a2)
+        return a1-a2;
+    else
+        return b1-b2;
+}
+
+bool compare_less(int a, int b, int c, int d)
+{
+    return (a < c) || (a == c && b < d);
+}
+
+void write_to_file(std::fstream &fd, unsigned prog_num)
+{
+    unsigned long write_delay_after = random() % 1500+1;
+
+    #if TERMINAL_OUT_ON == 1
+    std::cout << get_cur_time() << "prog" << prog_num << " write: " << std::flush;
+    #else
+    fd << get_cur_time() << "prog" << prog_num << " write: " << std::flush;
+    #endif
+
+    unsigned N = random() % 15 + 1;
+    for(unsigned i = 0; i < N; ++i)
+    {
+        #if TERMINAL_OUT_ON == 1
+        std::cout << std::to_string(random() % 1000) + " " << std::flush;
+        #else
+        fd << std::to_string(random() % 1000) + " " << std::flush;
+        #endif
+        if(random() % 2 == 0)
+            sleep_ms(random() % 150);
+    }
+
+    #if TERMINAL_OUT_ON == 1
+    std::cout << std::endl;
+    #else
+    fd << std::endl;
+    #endif
+    
+    sleep_ms(write_delay_after);
+}
+
+void write_to_file(int fd, unsigned prog_num)
+{
+    unsigned long write_delay_after = random() % 1500+1;
+
+    #if TERMINAL_OUT_ON == 1
+    int ffd = 1;
+    #else
+    int ffd = fd;
+    #endif
+
+    std::string buffS;
+
+    buffS = get_cur_time() + "prog" + std::to_string(prog_num) + " write: ";
+    write(ffd, buffS.c_str(), buffS.length());
+
+    unsigned N = random() % 15 + 1;
+    for(unsigned i = 0; i < N; ++i)
+    {
+        buffS = std::to_string(random() % 1000) + " ";
+        write(ffd, buffS.c_str(), buffS.length());
+        if(random() % 2 == 0)
+            sleep_ms(random() % 150);
+    }
+
+    write(ffd, "\n", 1);
+    
+    sleep_ms(write_delay_after);
+}
+
+std::string print_arr(const int* a, unsigned n)
+{
+    std::string res = "[";
+
+    for(unsigned li = 0; li < n; ++li)
+    {
+        res += std::to_string(a[li]);
+        if(li != n-1)
+        res += " ";
+    }
+    res += "]";
+
+    return res;
 }
 ```
