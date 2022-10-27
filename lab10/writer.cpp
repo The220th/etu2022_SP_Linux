@@ -62,6 +62,7 @@ void write_to_file(int prog_num, const char* file_name);
         5. Если читатель создавал семафоры, то он должен дождаться пока все закончат и уничтожить все созданные семафоры. 
         6. Конец. 
 
+    На деле нумерация мьютексов начинается с нуля. 
 */
 
 /*
@@ -87,7 +88,7 @@ int main(int argc, char* argv[])
     const int sem_id = create_shsem(prog_num, sem_key);
     struct sembuf sembuff_buff;
 
-    sembuff_buff = {4, 1, 0};
+    sembuff_buff = {3, 1, 0};
     semop(sem_id, &sembuff_buff, 1);
 
     sleep_ms(rnd(1150, 1300));
@@ -98,21 +99,21 @@ int main(int argc, char* argv[])
         std::cout << "\nwriter " << prog_num << " want to write " << times_count << " lines. " << std::endl; 
         for(unsigned gi = 0; gi < times_count; ++gi)
         {
-            sembuff_buff = {2, 1, 0};
+            sembuff_buff = {1, 1, 0};
             semop(sem_id, &sembuff_buff, 1);
 
-            sembuff_buff = {3, 0, 0};
+            sembuff_buff = {2, 0, 0};
             semop(sem_id, &sembuff_buff, 1);
 
-            sembuff_buff = {1, -1, 0};
+            sembuff_buff = {0, -1, 0};
             semop(sem_id, &sembuff_buff, 1);
 
             write_to_file(prog_num, FILE_NAME);
 
-            sembuff_buff = {1, 1, 0};
+            sembuff_buff = {0, 1, 0};
             semop(sem_id, &sembuff_buff, 1);
 
-            sembuff_buff = {2, -1, 0};
+            sembuff_buff = {1, -1, 0};
             semop(sem_id, &sembuff_buff, 1);
 
             sleep_ms(rnd(50, 300));
@@ -120,19 +121,21 @@ int main(int argc, char* argv[])
 
 
 
-    sembuff_buff = {4, -1, 0};
+    sembuff_buff = {3, -1, 0};
     semop(sem_id, &sembuff_buff, 1);
 
     if(prog_num == CREATOR_PROG_NUM)
     {
-        sembuff_buff = {4, 0, 0};
+        std::cout << "writer " << prog_num << " waiting others readers and writers... " << std::flush; 
+        sembuff_buff = {3, 0, 0};
         semop(sem_id, &sembuff_buff, 1);
         std::cout << "Destroying semaphores with key = " << sem_key << " and id = " << sem_id << "... " << std::flush; 
-        if(shmctl(sem_id, IPC_RMID, 0) < 0)
+        if(semctl(sem_id, -1, IPC_RMID, 0) < 0)
         {
             perror("Destroy semaphores in shmctl failed");
         }
-        std::cout << "OK! " << std::endl; 
+        else
+            std::cout << "OK! " << std::endl; 
     }
     return 0;
 }
@@ -196,7 +199,7 @@ int create_shsem(int prog_num, int sem_key)
 
     if(prog_num == CREATOR_PROG_NUM)
     {
-        struct sembuf sembuff_buff = {1, 1, 0};
+        struct sembuf sembuff_buff = {0, 1, 0};
         semop(shsem_id, &sembuff_buff, 1);
     }
 

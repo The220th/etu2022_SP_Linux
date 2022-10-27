@@ -16,7 +16,7 @@ do
 	let "index_w=index_w+1"
 done
 
-while (( $index_r < 15 )) # readers
+while (( $index_r < 7 )) # readers
 do
 	./reader -$index_r $SEM_KEY &
 	let "index_r=index_r+1"
