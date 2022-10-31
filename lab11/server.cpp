@@ -24,7 +24,7 @@
 #include <string>
 #include <sstream>
 
-#define TIMEOUT_TIME 3000
+#define TIMEOUT_TIME 3000   // ms
 #define LISTEN_NUM 5
 #define MAXEVENTS 150
 
