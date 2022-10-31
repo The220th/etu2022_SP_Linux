@@ -210,7 +210,7 @@ void client_handler(int client_fd, unsigned handler_id)
     unsigned char buffer[8];
     ssize_t readed;
 
-    readed = read(client_fd, buffer, 8);
+    readed = read(client_fd, buffer, 8); // sleep(10);
     if(readed != 8)
     {
         std::cout << "Cannot read 8" << std::endl;

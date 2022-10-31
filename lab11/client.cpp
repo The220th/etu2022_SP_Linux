@@ -70,27 +70,33 @@ int main(int argc, char* argv[])
             addr.sin_port = htons(port);
             addr.sin_addr.s_addr = inet_addr(SERVER_IP);
     
-                struct timeval tv;
-                fd_set readfds;
-                FD_ZERO(&readfds);
-                FD_SET(sock, &readfds);
-                tv.tv_usec = TIMEOUT_TIME*1000;
-                int rv = select(sock+1, &readfds, NULL, NULL, &tv);
-
-            if(rv > 0)
+            struct timeval tv;
+            // https://stackoverflow.com/questions/4181784/how-to-set-socket-timeout-in-c-when-making-multiple-connections
+            tv.tv_sec = TIMEOUT_TIME/1000; tv.tv_usec = 0;
+            if (setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(struct timeval)) < 0)
             {
-                std::cout << "Connecting to: " << inet_ntoa(addr.sin_addr) << ":" << htons(addr.sin_port) << "... " << std::flush;
-                if(connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0)
-                {
-                    perror("connect");
-                    exit(EXIT_FAILURE);
-                }
-                std::cout << "OK! " << std::endl;
-
-                do_do(sock);
+                perror("setsockopt for in timeout");
+                exit(EXIT_FAILURE);
             }
-            else
-                std::cout << "Timeout. Exiting... " << std::endl;
+
+            tv.tv_sec = TIMEOUT_TIME/1000; tv.tv_usec = 0;
+            if (setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval)) < 0)
+            {
+                perror("setsockopt for out timeout");
+                exit(EXIT_FAILURE);
+            }
+
+
+            std::cout << "Connecting to: " << inet_ntoa(addr.sin_addr) << ":" << htons(addr.sin_port) << "... " << std::flush;
+            if(connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+            {
+                perror("connect");
+                exit(EXIT_FAILURE);
+            }
+            std::cout << "OK! " << std::endl;
+
+            do_do(sock);
+
 
             std::cout << "Clossing socket... " << std::flush;
             close(sock);
@@ -134,6 +140,8 @@ union Long64
 
 void do_do(int server_fd)
 {
+    int ret_buff;
+
     unsigned long a_n = rnd(3, 30);
     int *a = (int*)malloc(sizeof(int)*a_n);
     for(unsigned li = 0; li < a_n; ++li) a[li] = rnd(0, 999);
@@ -146,9 +154,19 @@ void do_do(int server_fd)
     for(unsigned li = 0; li < 8; ++li)
         buffer[li] = msg_size.c[li];
     
-    send(server_fd, buffer, 8, 0);
+    ret_buff = send(server_fd, buffer, 8, 0);
+    if(ret_buff < 0 && errno == EWOULDBLOCK)
+    {
+        std::cout << "Timeout. Exiting... " << std::endl;
+        exit(EXIT_FAILURE);
+    }
 
     send(server_fd, a, a_n*sizeof(int), 0);
+    if(ret_buff < 0 && errno == EWOULDBLOCK)
+    {
+        std::cout << "Timeout. Exiting... " << std::endl;
+        exit(EXIT_FAILURE);
+    }
 
     std::cout << "Sended: " << "[ " << std::flush;
         for(unsigned long li = 0; li < a_n; ++li)
@@ -157,6 +175,11 @@ void do_do(int server_fd)
 
 
     int readed = read(server_fd, a, a_n*sizeof(int));
+    if(ret_buff < 0 && errno == EWOULDBLOCK)
+    {
+        std::cout << "Timeout. Exiting... " << std::endl;
+        exit(EXIT_FAILURE);
+    }
     if(readed != a_n*sizeof(int))
     {
         std::cout << "Cannot read " << (a_n*sizeof(int)) << std::endl;
