@@ -22,6 +22,7 @@
 #include <fstream>
 #include <chrono>
 #include <string>
+#include <sstream>
 
 #define TIMEOUT_TIME 3000
 #define LISTEN_NUM 5
@@ -32,13 +33,17 @@ std::string get_cur_time();
 /*including min and including max*/
 int rnd(int min, int max);
 
-void client_handler(int client_fd);
+void client_handler(int client_fd, unsigned handler_id);
+
+void sort(int* a, unsigned long n);
 
 /*
 ./server {port}
 */
 int main(int argc, char* argv[])
 {
+    unsigned gi = 1;
+
     if(argc != 2)
     {
         std::cout << "Syntax error. Expected: \"> ./server {port}\"" << std::endl;
@@ -138,9 +143,10 @@ int main(int argc, char* argv[])
                                 }
                                 else if(ret_buff == 0)
                                 {
-                                    client_handler(client);
+                                    client_handler(client, gi);
                                     exit(EXIT_SUCCESS);
                                 }
+                                ++gi;
                             }
                             else
                             {
@@ -197,8 +203,10 @@ union Long64
    unsigned char c[8];
 };
 
-void client_handler(int client_fd)
+void client_handler(int client_fd, unsigned handler_id)
 {
+    std::ostringstream ss;
+
     unsigned char buffer[8];
     ssize_t readed;
 
@@ -223,13 +231,35 @@ void client_handler(int client_fd)
         exit(EXIT_FAILURE);
     }
 
-    std::cout << "[ " << std::flush;
-    for(unsigned long li = 0; li < sz; ++li)
-    {
-        std::cout << a[li] << " " << std::flush;
-    }
-    std::cout << "] " << std::endl;
+    ss << "Getted (id=" << handler_id << "): " << "[ " << std::flush;
+        for(unsigned long li = 0; li < sz; ++li)
+            ss << a[li] << " " << std::flush;
+                    ss << "] " << std::endl;
+
+    sort(a, sz);
+
+    send(client_fd, a, sz*sizeof(int), 0);
+
+    ss << "Sended (id=" << handler_id << "): " << "[ " << std::flush;
+        for(unsigned long li = 0; li < sz; ++li)
+            ss << a[li] << " " << std::flush;
+                    ss << "] " << std::endl;
+
+    std::cout << ss.str() << std::endl;
 
     free(a);
     close(client_fd);
+}
+
+void sort(int* a, unsigned long n)
+{
+    int buff;
+    for(unsigned long i = 0; i < n-1; ++i)
+        for(unsigned long j = i+1; j < n; ++j)
+            if(a[i] > a[j])
+            {
+                buff = a[i];
+                a[i] = a[j];
+                a[j] = buff;
+            }
 }

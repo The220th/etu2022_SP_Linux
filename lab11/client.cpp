@@ -33,8 +33,6 @@ int rnd(int min, int max);
 
 void do_do(int server_fd);
 
-void sort(int* a, int n);
-
 /*
 ./client {port}
 */
@@ -140,25 +138,24 @@ void do_do(int server_fd)
 
     send(server_fd, a, a_n*sizeof(int), 0);
 
-    std::cout << "[ " << std::flush;
-    for(unsigned long li = 0; li < a_n; ++li)
+    std::cout << "Sended: " << "[ " << std::flush;
+        for(unsigned long li = 0; li < a_n; ++li)
+            std::cout << a[li] << " " << std::flush;
+                std::cout << "] " << std::endl;
+
+
+    int readed = read(server_fd, a, a_n*sizeof(int));
+    if(readed != a_n*sizeof(int))
     {
-        std::cout << a[li] << " " << std::flush;
+        std::cout << "Cannot read " << (a_n*sizeof(int)) << std::endl;
+        exit(EXIT_FAILURE);
     }
-    std::cout << "] " << std::endl;
+
+    std::cout << "Getted: " << "[ " << std::flush;
+        for(unsigned long li = 0; li < a_n; ++li)
+            std::cout << a[li] << " " << std::flush;
+                std::cout << "] " << std::endl;
 
     free(a);
 }
 
-void sort(int* a, int n)
-{
-    int buff;
-    for(unsigned i = 0; i < n-1; ++i)
-        for(unsigned j = i+1; j < n; ++j)
-            if(a[i] > a[j])
-            {
-                buff = a[i];
-                a[i] = a[j];
-                a[j] = buff;
-            }
-}
