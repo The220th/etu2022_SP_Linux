@@ -23,7 +23,7 @@
 #include <chrono>
 #include <string>
 
-#define TIMEOUT_TIME 3000      // ms
+#define TIMEOUT_TIME 3      // s
 #define SERVER_IP "127.0.0.1"
 
 void sleep_ms(unsigned ms);
@@ -70,27 +70,22 @@ int main(int argc, char* argv[])
             addr.sin_port = htons(port);
             addr.sin_addr.s_addr = inet_addr(SERVER_IP);
     
-                struct timeval tv;
-                fd_set readfds;
-                FD_ZERO(&readfds);
-                FD_SET(sock, &readfds);
-                tv.tv_sec = TIMEOUT_TIME/1000; tv.tv_usec = 0;
-                int rv = select(sock+1, &readfds, NULL, NULL, &tv);
-
-            if(rv > 0)
+            int start_time = time(NULL);
+            int dur = 0;
+            std::cout << "Connecting to: " << inet_ntoa(addr.sin_addr) << ":" << htons(addr.sin_port) << "... " << std::flush;
+            do
             {
-                std::cout << "Connecting to: " << inet_ntoa(addr.sin_addr) << ":" << htons(addr.sin_port) << "... " << std::flush;
-                if(connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+                if(connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0)
                 {
-                    perror("connect");
-                    exit(EXIT_FAILURE);
+                    std::cout << "OK! " << std::endl;
+                    do_do(sock);
+                    break;
                 }
-                std::cout << "OK! " << std::endl;
-
-                do_do(sock);
-            }
-            else
-                std::cout << "Timeout. Exiting... " << std::endl;
+                else
+                    dur = time(NULL) - start_time;
+            }while(dur < TIMEOUT_TIME);
+            if(dur >= TIMEOUT_TIME)
+                std::cout << "\nTimeout. Exiting... " << std::endl;
 
             std::cout << "Clossing socket... " << std::flush;
             close(sock);
