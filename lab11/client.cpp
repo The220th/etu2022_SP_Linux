@@ -69,12 +69,12 @@ int main(int argc, char* argv[])
             addr.sin_family = AF_INET;
             addr.sin_port = htons(port);
             addr.sin_addr.s_addr = inet_addr(SERVER_IP);
-    
             int start_time = time(NULL);
             int dur = 0;
             std::cout << "Connecting to: " << inet_ntoa(addr.sin_addr) << ":" << htons(addr.sin_port) << "... " << std::flush;
             do
             {
+                sleep_ms(rnd(2, 350));
                 if(connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0)
                 {
                     std::cout << "OK! " << std::endl;
@@ -129,6 +129,7 @@ union Long64
 
 void do_do(int server_fd)
 {
+    std::cout << "do_do" << std::endl;
     unsigned long a_n = rnd(3, 30);
     int *a = (int*)malloc(sizeof(int)*a_n);
     for(unsigned li = 0; li < a_n; ++li) a[li] = rnd(0, 999);
